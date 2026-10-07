@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 import asyncio
 import aiohttp
 import json
@@ -165,7 +168,7 @@ async def fetch_products(domain, proxy_str=None):
         proxy = parse_proxy(proxy_str) if proxy_str else None
         
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            async with session.get(f"{domain}/products.json", proxy=proxy, timeout=10) as resp:
+            async with session.get(f"{domain}/products.json", proxy=proxy) as resp:
                 if resp.status != 200:
                     return False, f"<b>Site Error! Status: {resp.status}</b>"
                 text = await resp.text()
@@ -1046,56 +1049,16 @@ def shopify_checker():
         
         variant_id = request.args.get('variant')
         
-        # ✅ BULLETPROOF FIX — fresh thread + fresh loop, no asyncio.run()
-        import threading
-        
-        _result = {}
-        
-        def _run_async():
-            try:
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    _result['value'] = new_loop.run_until_complete(
-                        process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
-                    )
-                finally:
-                    new_loop.close()
-                    asyncio.set_event_loop(None)
-            except Exception as e:
-                _result['error'] = str(e)
-        
-        t = threading.Thread(target=_run_async)
-        t.start()
-        t.join(timeout=60)
-        
-        if t.is_alive():
-            return jsonify({
-                "error": "Timeout",
-                "status": False,
-                "Gateway": "UNKNOWN",
-                "Price": 0.0,
-                "Response": "ERROR: Request timeout",
-                "cc": cc_string
-            }), 500
-        
-        if 'error' in _result:
-            return jsonify({
-                "error": _result['error'],
-                "status": False,
-                "Gateway": "UNKNOWN",
-                "Price": 0.0,
-                "Response": f"ERROR: {_result['error']}",
-                "cc": cc_string
-            }), 500
-        
-        success, message, gateway, price, currency = _result['value']
+        # ✅ FINAL FIX — gevent handles asyncio.run()
+        success, message, gateway, price, currency = asyncio.run(
+            process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
+        )
         
         clean_response = extract_clean_response(message)
         
         response_data = {
             "Gateway": gateway,
-            "Price": float(price) if price.replace('.', '', 1).isdigit() else 0.0,
+            "Price": float(price) if str(price).replace('.', '', 1).isdigit() else 0.0,
             "Response": clean_response,
             "Status": success,
             "cc": cc_string
