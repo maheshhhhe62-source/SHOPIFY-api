@@ -1,6 +1,5 @@
 flask
 aiohttp
 gunicorn
-gevent
 requests
 packaging
