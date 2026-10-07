@@ -1046,16 +1046,10 @@ def shopify_checker():
         
         variant_id = request.args.get('variant')
         
-        # ❌ YEH 8 LINES PROBLEM HAIN
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        try:
-            success, message, gateway, price, currency = loop.run_until_complete(
-                process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
-            )
-        finally:
-            loop.close()
+        # ✅ FIXED: asyncio.run() — thread-safe, multi-request safe
+        success, message, gateway, price, currency = asyncio.run(
+            process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
+        )
         
         clean_response = extract_clean_response(message)
         
