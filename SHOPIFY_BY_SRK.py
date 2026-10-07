@@ -1046,15 +1046,50 @@ def shopify_checker():
         
         variant_id = request.args.get('variant')
         
-        # ✅ FIXED: Thread-safe async run
-        import concurrent.futures
+        # ✅ BULLETPROOF FIX — fresh thread + fresh loop, no asyncio.run()
+        import threading
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(
-                asyncio.run,
-                process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
-            )
-            success, message, gateway, price, currency = future.result(timeout=60)
+        _result = {}
+        
+        def _run_async():
+            try:
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    _result['value'] = new_loop.run_until_complete(
+                        process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
+                    )
+                finally:
+                    new_loop.close()
+                    asyncio.set_event_loop(None)
+            except Exception as e:
+                _result['error'] = str(e)
+        
+        t = threading.Thread(target=_run_async)
+        t.start()
+        t.join(timeout=60)
+        
+        if t.is_alive():
+            return jsonify({
+                "error": "Timeout",
+                "status": False,
+                "Gateway": "UNKNOWN",
+                "Price": 0.0,
+                "Response": "ERROR: Request timeout",
+                "cc": cc_string
+            }), 500
+        
+        if 'error' in _result:
+            return jsonify({
+                "error": _result['error'],
+                "status": False,
+                "Gateway": "UNKNOWN",
+                "Price": 0.0,
+                "Response": f"ERROR: {_result['error']}",
+                "cc": cc_string
+            }), 500
+        
+        success, message, gateway, price, currency = _result['value']
         
         clean_response = extract_clean_response(message)
         
