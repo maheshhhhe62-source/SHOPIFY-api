@@ -1013,7 +1013,6 @@ async def process_card_async(cc, mes, ano, cvv, site_url, variant_id=None, proxy
     return await process_card(cc, mes, ano, cvv, site_url, variant_id, proxy_str)
 
 app = Flask(__name__)
-# LOGIC BY @NEWXSRK
 @app.route('/shopify', methods=['GET'])
 def shopify_checker():
     try:
@@ -1047,6 +1046,7 @@ def shopify_checker():
         
         variant_id = request.args.get('variant')
         
+        # ❌ YEH 8 LINES PROBLEM HAIN
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
