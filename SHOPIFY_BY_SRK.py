@@ -1046,10 +1046,15 @@ def shopify_checker():
         
         variant_id = request.args.get('variant')
         
-        # ✅ FIXED: asyncio.run() — thread-safe, multi-request safe
-        success, message, gateway, price, currency = asyncio.run(
-            process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
-        )
+        # ✅ FIXED: Thread-safe async run
+        import concurrent.futures
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                asyncio.run,
+                process_card_async(cc, mes, ano, cvv, site, variant_id, proxy_str)
+            )
+            success, message, gateway, price, currency = future.result(timeout=60)
         
         clean_response = extract_clean_response(message)
         
@@ -1072,7 +1077,3 @@ def shopify_checker():
             "Response": f"ERROR: {str(e)}",
             "cc": request.args.get('cc', '')
         }), 500
-
-# LOGIC BY @NEWXSRK
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=False)
