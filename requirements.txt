@@ -1,5 +1,0 @@
-flask
-aiohttp
-gunicorn
-requests
-packaging
